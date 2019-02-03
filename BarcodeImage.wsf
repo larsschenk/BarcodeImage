@@ -1,0 +1,675 @@
+<package>
+  <job id="vbs">
+    <script language="VBScript">
+
+    ' BarcodeImage.wsf
+    '
+    ' by www.activebarcode.com, www.activebarcode.de
+    ' email: info@activebarcode.de
+    ' Authors: Lars Schenk & Frank Horn
+    '
+    ' Synopsis: 
+    ' Create image files of barcodes by using the ActiveBarcode Control.
+    ' 
+    ' Hint: If you want to use cscript as your default script host use 
+    '       C:\>cscript //h:cscript 
+    '
+    ' Last update:
+    ' 02.02.2019 - Version 2.0.1 (ls)
+    '              Adder URL to developer license info. Minor text changes.
+    ' 30.01.2019 - Version 2.0.0 (ls)
+    '              More verbose version number from ActiveBarcode Object x86/x64.
+    '              Updated message on CreateObject error.
+    ' 17.04.2017 - Removed mapping of control codes because it's done in the control now (ls)
+    ' 10.01.2017 - Removed obsolete error message for x64 because 
+    '              the control is available for x64 since version 6.0.0 (f)
+    ' xx.12.2016 - Complete set of control characters were added ASCII 1-31 (f)
+    ' 24.01.2016 - Added our digital signature for added security
+    ' 27.02.2013 - Control characters added (f)
+    ' 08.02.2010 - New error message when running on x64 system (f)
+    ' 17.03.2006 - borderwith and borderheigh default = 0
+    ' 08.03.2006 - wmf and emf 
+    ' 10.02.2006 - alignment
+    ' 06.12.2005 - short help and verbose help
+    ' 30.11.2005 - development (porting from delphi source(f))
+    ' TODO Validate args that are integer 
+    '
+    'This program (BarcodeImage.wsf) is free software; you can redistribute it and/or
+    'modify it under the terms of the GNU General Public License
+    'as published by the Free Software Foundation; either version 2
+    'of the License, or (at your option) any later version.
+    '
+    'This program (BarcodeImage.wsf) is distributed in the hope that it will be useful,
+    'but WITHOUT ANY WARRANTY; without even the implied warranty of
+    'MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    'GNU General Public License for more details.
+    '
+    'You can download a copy of the GNU General Public License at
+    'http://www.gnu.org/licenses/gpl.txt
+
+    Version = "2.0.1"
+
+    ' The ActiveBarcode Control
+    Dim barcode
+    On Error Resume Next  
+    Set barcode = WScript.CreateObject("BARCODE.BarcodeCtrl.1")
+        If Err.Number <> 0 Then 
+      WScript.echo "Error: Can't create ActiveBarcode control. Try to reinstall ActiveBarcode from www.ActiveBarcode.com."
+      WScript.Quit (Err.Number)
+    End If
+    On Error Goto 0
+    ' Overwrite defaults from the BarcodeControl
+    barcode.borderwidth=0
+    barcode.borderheight=0
+
+    ' Parameter for the SaveAs Function
+    Dim Filename, Filetype
+    Dim Width, Height
+    Dim Colordepth, Transparent, Flags, Angle, DPI
+    ' set defaults
+    Width = 400
+    Height = 150
+    Filetype = -1   ' autodetect by filename
+    Colordepth = 0  ' not set
+    Flags = 0       ' not set
+    Transparent = 0 ' no Transparency 
+    Angle = -1      ' Default 
+    DPI = 0
+
+    Barcodetext = "" ' if it remains empty get the DemoText from control
+
+    ' Helper var
+    Dim Warnings    ' holds all warning messages
+    Dim Errors      ' holds all critical errors messages
+    Dim displaymessages, displayerrors,displaydebug
+    displaymessages = TRUE  ' Default show warnings and messages
+    displayerrors = TRUE    ' Default show errors
+    displaydebug  = FALSE   ' Default no debug output
+
+
+    Function help(Programmbanner)
+      Set WshShell = WScript.CreateObject("WScript.Shell")
+      WScript.echo Programmbanner & _ 
+       "Usage: BarcodeImage.wsf filename [-text=] [-type=] [-width=] [-height=]" & vbCRLF & _
+       "       [-alignment=] [-borderwidth=] [-borderheight=]" & vbCRLF & _
+       "       [-showtext=] [-forecolor=] [-backcolor=] [-fontname=] [-fontsize=]" & vbCRLF & _
+       "       [-fontbold=] [-fontitalic=] [-fontunderline=] [-fontstrikeout=]" & vbCRLF & _
+       "       [-filetype=] [-colordepth=] [-flags=] [-angle=] [-transparent=] [-dpi=]" & vbCRLF & _
+       "       [-notchheightinpercent=] [-echo=]" & vbCRLF & _
+       vbCRLF & _
+       "From console:" & vbCRL & _
+       vbCRLF & _
+       "cscript """ & WshShell.ExpandEnvironmentStrings("%PROGRAMFILES%") & "\ActiveBarcode\BarcodeImage.wsf""" & vbCRLF & _
+       vbCRLF & _
+       "BarcodeImage.wsf -help for a verbose help page." & vbCRLF & _
+       vbCRLF & _
+       "For a faster, enhanced, universal and more powerful alternative use " & vbCRLF & _
+       "ActiveBarcodeCLI.exe"
+      help = true
+    End Function
+
+
+    Function helpverbose(Programmbanner)
+      Set WshShell = WScript.CreateObject("WScript.Shell")
+      WScript.echo Programmbanner & _ 
+       "Usage: BarcodeImage.wsf filename [OPTIONS]" & vbCRLF & _
+       vbCRLF & _
+       "From console:" & vbCRL & _
+       vbCRLF & _
+       "cscript """ & WshShell.ExpandEnvironmentStrings("%PROGRAMFILES%") & "\ActiveBarcode\BarcodeImage.wsf""" & vbCRLF & _
+       vbCRLF & _
+       "List of" & vbCRLF & _
+       "Options                Description                  Example" & vbCRLF & _
+       "---------------------- ---------------------------- ------------------------" & vbCRLF & _
+       "-text=                 text to be encoded           -text=123456789012" & vbCRLF & _
+       "-type=                 barcode type                 -type=0" & vbCRLF & _
+       "-width=                width in pixels              -width=500" & vbCRLF & _
+       "-height=               height in pixels             -height=500" & vbCRLF & _
+       "-alignment=            0=left, 1=center, 2=right    -alignment=1" & vbCRLF & _
+       "-borderwidth=          borderwidth in pixels        -borderwidth=10" & vbCRLF & _
+       "-borderheight=         borderheight in pixels       -borderheight=1" & vbCRLF & _
+       "-notchheightinpercent= the notch height in %        -notchheightinpercent=25" & vbCRLF & _
+       "-showtext=off          no textline under the code   -showtext=off" & vbCRLF & _
+       vbCRLF & _
+       "-forecolor=            sets the foreground color    -foreground=000000" & vbCRLF & _
+       "                       hexadecimal RGB as RRGGBB    (example is black)" & vbCRLF & _
+       vbCRLF & _
+       "-backcolor=            sets the background color    -background=FFFFFF" & vbCRLF & _
+       "                       hexadecimal RGB as RRGGBB    (example is white)" & vbCRLF & _
+       vbCRLF & _
+       "-fontname=             font for the text line       -fontname=arial" & vbCRLF & _
+       "-fontsize=             font size                    -fontsize=8" & vbCRLF & _
+       "-fontbold=             font bold (on/off)           -fontbold=on" & vbCRLF & _
+       "-fontitalic=           font italic (on/off)         -fontitalic=on" & vbCRLF & _
+       "-fontunderline=        font underline (on/off)      -fontunderline=on" & vbCRLF & _
+       "-fontstrikeout=        font strikeout (on/off)      -fontstrikeout=on" & vbCRLF & _
+       vbCRLF & _
+       "-filetype=             file type of image           -filetype=bmp" & vbCRLF & _
+       "                       (valid values: bmp,jpg,png," & vbCRLF & _
+       "                        tif,tga,gif,wbm,pbm,pgm,ppm,xpm,wmf,emf)" & vbCRLF & _
+       "                       Default: auto detect by extension of filename" & vbCRLF & _
+       vbCRLF & _
+       "-colordepth=           colordepth of the image file -colordepth=24" & vbCRLF & _
+       "                       (valid values: 1,8,16,24,36)" & vbCRLF & _
+       vbCRLF & _
+       "-flags=                flags for the image file     -flags=0x80" & vbCRLF & _
+       "                       (see documentation for values)" & vbCRLF & _
+       vbCRLF & _
+       "-angle=                rotates the image file       -angle=180" & vbCRLF & _
+       "                       (valid values: 0-359)" & vbCRLF & _
+       vbCRLF & _
+       "-transparent=          background transparency      -transparent=1" & vbCRLF & _
+       "                       (valid values: 0, 1" & vbCRLF & _
+       "                        not implemented yet)" & vbCRLF & _
+       vbCRLF & _
+       "-dpi=                  resolution in DPI            -dpi=300" & vbCRLF & _
+       "                       for jpg, png, tif & bmp files" & vbCRLF & _
+       vbCRLF & _
+       "-echo=                 off:    display no messages  -echo=off" & vbCRLF & _
+       "                       errors: display only errors  -echo=errors" & vbCRLF & _
+       "                       verbose:display all messages -echo=verbose" & vbCRLF & _
+       "                       and open barcode in ImageView" & vbCRLF & _
+       vbCRLF & _
+       vbCRLF & _
+       "You can use control characters within pointed brackets:" & vbCRLF & _
+       "<SOH>, <STX>, <ETX>, <EOT>, <ENQ>, <ACK>, <BEL>, <BS>, <TAB>, <LF>," & vbCRLF & _
+       "<VT>, <FF>, <CR>, <SO>, <SI>, <DLE>, <DC1>, <DC2>, <DC3>, <DC4>, <NAK>," & vbCRLF & _
+       "<SYN>, <ETB>, <CAN>, <EM>, <SUB>, <ESC>, <FS>, <GS>, <RS>, <US> and <DEL>" & vbCRLF & _
+       vbCRLF & _
+       vbCRLF & _
+       "Examples of usage:" & vbCRLF & _
+       "BarcodeImage.wsf barcode.jpeg" & vbCRLF & _ 
+       "BarcodeImage.wsf ean.png text=192837465012 typename=ean13 width=400 height=200" & vbCRLF & _
+       "BarcodeImage.wsf code128.bmp ""text=Hello World"" type=14 width=500 height=100" & vbCRLF & _ 
+       vbCRLF & _
+       "Example from console:" & vbCRL & _
+       vbCRLF & _
+       "cscript """ & WshShell.ExpandEnvironmentStrings("%PROGRAMFILES%") & "\ActiveBarcode\BarcodeImage.wsf"" barcode.jpeg" & vbCRLF & _
+       vbCRLF & _
+       "For a faster, enhanced, universal and more powerful alternative use " & vbCRLF & _
+       "ActiveBarcodeCLI.exe"
+      helpverbose = true
+    End Function
+
+    '
+    ' parses a single Argument and sets globla vars
+    '
+    function parseArg (Arg)
+      Arg_lowercase = LCase(Arg)
+      pos = instr(Arg_lowercase,"=")
+      If pos > 1 Then
+        command   = mid(Arg_lowercase, 1, pos-1)
+        parameter = mid(Arg, pos+1)
+        ' allow commands with leeding "-" or "/" or without it
+        If left(command,1) = "-" or left(command,1) = "/" Then command = right(command,len(command)-1)
+      End if
+      ArgIsParsed = TRUE
+
+      Select Case command
+
+        Case "help"
+          helpverbose(Programmbanner)
+
+        Case "text"
+           Barcodetext = parameter
+
+        Case "type"
+            parameter = cint(parameter)
+            If (parameter > barcode.CountTypesSupported and parameter<>99) Then
+                Warnings = Warning & "Warning: type parameter has invalid value: "& parameter & ", using default instead" & vbCBLF
+            Else
+                barcode.Type = parameter
+            End if
+
+        Case "typename"
+            oldType = barcode.Type
+            barcode.Type = 99 ' set to none
+            barcode.Typename = parameter
+            If barcode.Type = 99 Then
+              Warnings = Warnings & "Warning: typename parameter has invalid value: " & parameter
+              barcode.Type = oldType    
+            End if
+
+        Case "width"
+            Width = cint(parameter)
+        
+        Case "height"
+            Height = cint(parameter)
+
+        Case "alignment"
+            barcode.alignment = cint(parameter)
+
+        Case "borderwidth"  
+            barcode.borderwidth = cint(parameter)
+ 
+        Case "borderheight"
+            barcode.borderheight = cint(parameter)
+
+        Case "notchheightinpercent"
+            barcode.notchheightinpercent = cint(parameter)
+
+        Case "forecolor"
+            temp = cLng("&H" & parameter)
+            barcode.forecolor = (temp AND &H0000FF)*&H10000 + _
+                                ((((temp AND &HFFFF00) \ &H100) AND &HFF) *&H100) + _
+                                (temp AND &HFF0000) \ &H10000
+            ' Explenation:
+            '
+            ' First of all you must know there is a bug in the AND operation: 
+            ' 112233 AND FF0000 results in 110000 (ok)
+            ' 112233 AND 00FF00 results in 112200 (wrong! must be 002200)
+            ' 112233 AND 0000FF results in 000033 (ok) 
+            '
+            ' Now we explain how to convert the RRGGBB Parameter (HTML-Style) to BBGGRR (COM-Style)
+            ' CODE: (temp AND &H0000FF)*&H10000
+            ' MEANS: extract BLUE and shift left with *&H10000 what is the same as SHL 16.
+            '
+            ' CODE: + ((((temp AND &HFFFF00) \ &H100) AND &HFF) *&H100) +
+            ' MEANS: extract GREEN and avoid the AND Bug shown above.
+            ' (temp AND &HFFFF00):
+            ' -> ergibt bei dem beispiel 112233 das Ergebnis 112200
+            ' dann mache ich: \ &H100) was einem SHR8 entspricht
+            ' -> ergibt 001122
+            ' dann den AND &HFF (entspricht 001122 AND &H0000FF)
+            ' -> ergibt 000022
+            ' zum Schluss den *&H100 (entspricht SHR 8)
+            ' -> ergibt 002200
+            ' Results in having the Green value extracted without running into the AND Bug.
+            '
+            ' CODE: (temp AND &HFF0000) \ &H10000
+            ' MEANS: extract RED and shift right with \&H10000 what is the same as SHR 16.
+            '
+            ' backcolor parameter is treated in the same way:
+
+        Case "backcolor"
+            temp = cLng("&H" & parameter)
+            barcode.backcolor = (temp AND &H0000FF)*&H10000 + _
+                                ((((temp AND &HFFFF00) \ &H100) AND &HFF) *&H100) + _
+                                (temp AND &HFF0000) \ &H10000
+ 
+        Case "filetype"
+            Select Case parameter
+                Case "jpg"  Filetype = 2
+                Case "jpeg" Filetype = 2
+                Case "png"  Filetype = 13
+                Case "tif"  Filetype = 18
+                Case "tga"  Filetype = 17
+                Case "gif"  Filetype = 25
+                Case "bmp"  Filetype = 0
+                Case "pbm"  Filetype = 7
+                Case "pgm"  Filetype = 11
+                Case "ppm"  Filetype = 14
+                Case "xpm"  Filetype = 23
+                Case "wbm"  Filetype = 19
+                Case "emf"  Filetype = 100
+                Case "wmf"  Filetype = 101
+                Case else 
+                  Warniungs = Warnings & "Warning: filetype parameter has invalid value: " & parameter & _
+                              ", using default instead"
+            End Select
+
+        Case "colordepth"
+            Colordepth = cint(parameter)
+            If Colordepth <> 1 and Colordepth <> 8 and Colordepth <> 16 and Colordepth <> 24 and Colordepth <> 32 Then
+                Warnings = Warnings & "Warning: colordepth parameter has invalid value: " & parameter & ", using default instead"
+                Colordepth = 0
+            End If
+     
+        Case "flags"
+            flags = cint(parameter)
+            
+        Case "fontname"
+            barcode.font.name = parameter
+            
+        Case "fontsize"
+            barcode.font.size = cint(parameter)
+            
+        Case "fontbold"
+            If LCase(parameter) = "on"   Then barcode.font.bold = 1
+            If LCase(parameter) = "1"    Then barcode.font.bold = 1
+            If LCase(parameter) = "true" Then barcode.font.bold = 1
+
+        Case "fontitalic"
+            If LCase(parameter) = "on"   Then barcode.font.italic = 1
+            If LCase(parameter) = "1"    Then barcode.font.italic = 1
+            If LCase(parameter) = "true" Then barcode.font.italic = 1
+            
+        Case "fontunderline"
+            If LCase(parameter) = "on"   Then barcode.font.underline = 1
+            If LCase(parameter) = "1"    Then barcode.font.underline = 1
+            If LCase(parameter) = "true" Then barcode.font.underline = 1
+            
+        Case "fontstrikeout"
+            If LCase(parameter) = "on"   Then barcode.font.strikethrough = 1 
+            If LCase(parameter) = "1"    Then barcode.font.strikethrough = 1 
+            If LCase(parameter) = "true" Then barcode.font.strikethrough = 1 
+
+        Case "echo"
+            If LCase(parameter) = "off" Then 
+              displaymessages = FALSE
+              displayerrors   = FALSE
+              displaydebug    = FALSE
+            End If
+            If LCase(parameter) = "errors" Then 
+              displaymessages = FALSE
+              displayerrors   = TRUE
+              displaydebug    = FALSE
+            End If
+            if LCase(parameter) = "verbose" Then
+              displaymessages = TRUE
+              displayerrors   = TRUE
+              displaydebug    = TRUE
+            End If
+            
+        Case "showtext"
+            If LCase(parameter) = "0"       Then barcode.showtext = FALSE
+            If LCase(parameter) = "1"       Then barcode.showtext = TRUE
+            If LCase(parameter) = "off"     Then barcode.showtext = FALSE
+            If LCase(parameter) = "on"      Then barcode.showtext = TRUE
+        
+        Case "transparent"
+            transparent = CInt(parameter)
+            
+        Case "angle"
+            angle = CInt(parameter)
+        
+        Case "dpi"
+            DPI = CInt(parameter)
+            
+        Case else
+            ArgIsParsed = FALSE
+      End Select
+
+
+      If ArgIsParsed = FALSE and command = "" and filename="" Then  ' parameter is the filename
+        Filename = Arg
+        ArgIsParsed = TRUE
+      End If
+
+      If ArgIsParsed = FALSE Then Warnings = Warnings & "Warning: Can not parse parameter '" & Arg & "'" & vbCRLF
+    end function
+
+
+
+
+    ' ##### main ####
+    ' ###
+
+    ' Handle all command line args
+
+    Programmbanner = vbCRLF & _
+                    "BarcodeImage.wsf " & Version & " is open source." & vbCRLF & _
+                    "You can redistribute it and/or modify it under the terms of the GNU GPL." & _
+                    vbCRLF & _
+                    vbCRLF & _
+                    "The ActiveBarcode Object " & barcode.version & " is" & vbCRLF & _
+                    "copyright (C) by the ActiveBarcode developers (www.activebarcode.com)" & _
+                    vbCRLF & _
+                    vbCRLF & _
+                    "https://www.activebarcode.com/license/distribution.html" & vbCRLF & vbCRLF
+    Warnings = Programmbanner
+
+    set commandLineArgs = WScript.Arguments
+
+    helpmode = false
+    If (commandLineArgs.Count>0) Then
+      If LCase(commandLineArgs(0)) = "-help" OR _
+         LCase(commandLineArgs(0)) = "/help" OR _ 
+         LCase(commandLineArgs(0)) = "help" Then helpmode = helpverbose(Programmbanner)
+    Else
+      If commandLineArgs.length = 0 Then helpmode = help(Programmbanner) 
+    End If
+
+    If (commandLineArgs.length > 0) and (helpmode = false) Then
+        For I = 0 to commandLineArgs.Count - 1
+            parseArg(commandLineArgs(I))
+        Next
+
+        '
+        ' ### Create the ActiveBarcode Object
+        ' ### using the given parameters  
+        '
+        If (Filename = "") AND (commandLineArgs.Count > 0) then 
+            Warnings = Warnings & "Warning: No filename specified." & vbCRLF
+            Filename = "nonamebarcode.png"
+        End If
+              
+        If Barcodetext = "" Then 
+          barcode.SetDemoText
+        Else
+          barcode.text = Barcodetext
+        End If
+
+        Debugmessage = vbCRLF & vbCRLF & "Parsed parameters:" & vbCRLF & _
+                        "Filename=" & Filename & vbCRLF & _
+                        "Widht=" & Width & vbCRLF & _
+                        "Height=" & Height & vbCRLF & _
+                        "Alignment=" & barcode.alignment & vbCRLF & _
+                        "Text=" & barcode.text & vbCRLF & _
+                        "Showtext=" & barcode.showtext & vbCRLF & _
+                        "Type=" & barcode.type & vbCRLF & _
+                        "Forecolor=" & hex(barcode.forecolor) & vbCRLF & _
+                        "Backcolor=" & hex(barcode.backcolor) & vbCRLF & _
+                        "Colordepth=" & Colordepth & vbCRLF & _
+                        "Angle=" & Angle & vbCRLF & _
+                        "Borderwidth=" & barcode.borderwidth & vbCRLF & _
+                        "Borderheight=" & barcode.borderheight & vbCRLF & _
+                        "Filetype=" & Filetype & vbCRLF & vbCRLF
+
+        result = barcode.SaveAsBySizeExtended(Filename, Width, Height, Filetype, Colordepth, Transparent, Flags, Angle, DPI)
+        If (Result <> 0) Then
+          Select Case Result      
+              Case 1
+                  Errors = Errors & "Error: Cannot write image file (" & filename & ")"
+              Case 2
+                  Errors = Errors & "Error: Wrong -colordepth=" & Colordepth & _
+                                    " for this file format (" & filename & ")"
+              Case 3
+                  Errors = Errors & "Error: -colordepth=" & Colordepth & _
+                                    " and -angle=" & angle & " not possible (" & filename & ")"
+              Case 4
+                  Errors = Errors & "Error: File type not supported (" & filename & ")"
+              Case Else
+                  Errors = Errors & "Error: Error Code " & result & " ("& filename & ")"
+          End Select
+        Else
+          If (NOT barcode.isvalid) Then Warnings = Warnings & "Warning: Barcode is not valid" & vbCRLF
+          Warnings = Warnings & "Barcode image written to " & filename & vbCRLF 
+
+          If displaydebug Then ' open BarcodeImage with ImageView 
+            Set WshShell = WScript.CreateObject("WScript.Shell")
+            WshShell.Run("%windir%\system32\rundll32.exe C:\WINDOWS\system32\shimgvw.dll,ImageView_Fullscreen " & _ 
+                         WshShell.CurrentDirectory & "\" & Filename)
+            Debugmessage = Debugmessage & "Open ImageView for " & WshShell.CurrentDirectory & "\" & Filename
+          End If
+
+        End If 
+ 
+      output = ""
+      If displaymessages Then Output = Output & Warnings
+      If displayerrors   Then Output = Output & Errors
+      If displaydebug    Then Output = Output & Debugmessage
+      If output <>""     Then WScript.Echo Output
+    End If
+    </script>
+  </job> 
+
+<signature>
+** SIG ** MIIWkwYJKoZIhvcNAQcCoIIWhDCCFoACAQExDzANBglg
+** SIG ** hkgBZQMEAgEFADB3BgorBgEEAYI3AgEEoGkwZzAyBgor
+** SIG ** BgEEAYI3AgEeMCQCAQEEEHAFYRrOONQRoqMAEEvTUJAC
+** SIG ** AQACAQACAQACAQACAQAwMTANBglghkgBZQMEAgEFAAQg
+** SIG ** vbr7G1M+H8M34D3gFCIf6ipW+svTQfzaAwEdcK/MY4qg
+** SIG ** ggtCMIIFWjCCBEKgAwIBAgIQUKqrwlqh/ihNBPL/ub0X
+** SIG ** pzANBgkqhkiG9w0BAQsFADB9MQswCQYDVQQGEwJHQjEb
+** SIG ** MBkGA1UECBMSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYD
+** SIG ** VQQHEwdTYWxmb3JkMRowGAYDVQQKExFDT01PRE8gQ0Eg
+** SIG ** TGltaXRlZDEjMCEGA1UEAxMaQ09NT0RPIFJTQSBDb2Rl
+** SIG ** IFNpZ25pbmcgQ0EwHhcNMTcwNDE0MDAwMDAwWhcNMjEw
+** SIG ** NDE0MjM1OTU5WjCBozELMAkGA1UEBhMCREUxDjAMBgNV
+** SIG ** BBEMBTIzNjY5MRswGQYDVQQIDBJTY2hsZXN3aWctSG9s
+** SIG ** c3RlaW4xHDAaBgNVBAcME1RpbW1lbmRvcmZlciBTdHJh
+** SIG ** bmQxHTAbBgNVBAkMFFJ1cHBlcnNkb3JmZXIgV2VnIDE4
+** SIG ** MRQwEgYDVQQKDAtMYXJzIFNjaGVuazEUMBIGA1UEAwwL
+** SIG ** TGFycyBTY2hlbmswggEiMA0GCSqGSIb3DQEBAQUAA4IB
+** SIG ** DwAwggEKAoIBAQDJBeMZBzbNPm7J3MlbsTipwaCOafrk
+** SIG ** +phpML8GL/OF+35eKv+wDThxkDhXiGhy4DvZg3FTwl/S
+** SIG ** hGcpYCS+5JXog0rusoaqEwbIu8UXxuzOeCIcbY8ZNIo/
+** SIG ** d6L+lJf6ZWDhtG6cmCxSAtNTqC/m4nbMpyQacKpULwkC
+** SIG ** W2Nt7GLImsCjCqwP+FlBfGAU58X1y/uUFLW9gsoF0M0g
+** SIG ** JkAllBX7DdyBZ6QYUvPYY8UbgLdSvhxjqMUhO3VAfAN8
+** SIG ** XELiUHrHkoRWu8DcaKzkqWLkpfzKVMenN5JhCNGci29i
+** SIG ** WFCriGKPW+EbeSDHc8GgAo6fGqJ1IQBwwSZJjayHG+ro
+** SIG ** zUq9AgMBAAGjggGtMIIBqTAfBgNVHSMEGDAWgBQpkWD/
+** SIG ** ik366/mmarjP+eZLvUnOEjAdBgNVHQ4EFgQU/zLU1eeY
+** SIG ** iYy0aFi7oZgl1ryG9QMwDgYDVR0PAQH/BAQDAgeAMAwG
+** SIG ** A1UdEwEB/wQCMAAwEwYDVR0lBAwwCgYIKwYBBQUHAwMw
+** SIG ** EQYJYIZIAYb4QgEBBAQDAgQQMEYGA1UdIAQ/MD0wOwYM
+** SIG ** KwYBBAGyMQECAQMCMCswKQYIKwYBBQUHAgEWHWh0dHBz
+** SIG ** Oi8vc2VjdXJlLmNvbW9kby5uZXQvQ1BTMEMGA1UdHwQ8
+** SIG ** MDowOKA2oDSGMmh0dHA6Ly9jcmwuY29tb2RvY2EuY29t
+** SIG ** L0NPTU9ET1JTQUNvZGVTaWduaW5nQ0EuY3JsMHQGCCsG
+** SIG ** AQUFBwEBBGgwZjA+BggrBgEFBQcwAoYyaHR0cDovL2Ny
+** SIG ** dC5jb21vZG9jYS5jb20vQ09NT0RPUlNBQ29kZVNpZ25p
+** SIG ** bmdDQS5jcnQwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3Nw
+** SIG ** LmNvbW9kb2NhLmNvbTAeBgNVHREEFzAVgRNpbmZvQGxh
+** SIG ** cnMtc2NoZW5rLmRlMA0GCSqGSIb3DQEBCwUAA4IBAQAc
+** SIG ** 09CKg38w92wCdadXNjwd1DBii+LIxg2CKKS+avu0HCTu
+** SIG ** 2Ng6Ins463DIvT5wA/cCiIKbz8fnFtrOu5FECsTPecdW
+** SIG ** zZJeb1TnporgVS3gMJsKtjqWp4Mr1FQbX1Bo5F9HWTVP
+** SIG ** u0S1aCHZJqaea4bX1iKZnPdEZ+TVzfZNyWSD/LII0LN8
+** SIG ** 3l0SuqfaKQnjJW7W0tAoAIK3iSN6sSO2JvWpeToiHzNj
+** SIG ** pc74t4PJ7Ln6nbKwLi0QfXoOEnr3f3tJ3QwHVcyHpghx
+** SIG ** JKg6GNaPdm8GlSflE4Uxn28Wec7dY8cyv+IzujP6Zny5
+** SIG ** jWSYIKRYYhB76gdCtsy1w5gTh4jxfYKwMIIF4DCCA8ig
+** SIG ** AwIBAgIQLnyHzA6TSlL+lP0ct800rzANBgkqhkiG9w0B
+** SIG ** AQwFADCBhTELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdy
+** SIG ** ZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9y
+** SIG ** ZDEaMBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxKzAp
+** SIG ** BgNVBAMTIkNPTU9ETyBSU0EgQ2VydGlmaWNhdGlvbiBB
+** SIG ** dXRob3JpdHkwHhcNMTMwNTA5MDAwMDAwWhcNMjgwNTA4
+** SIG ** MjM1OTU5WjB9MQswCQYDVQQGEwJHQjEbMBkGA1UECBMS
+** SIG ** R3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHEwdTYWxm
+** SIG ** b3JkMRowGAYDVQQKExFDT01PRE8gQ0EgTGltaXRlZDEj
+** SIG ** MCEGA1UEAxMaQ09NT0RPIFJTQSBDb2RlIFNpZ25pbmcg
+** SIG ** Q0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIB
+** SIG ** AQCmmJBjd5E0f4rR3elnMRHrzB79MR2zuWJXP5O8W+Of
+** SIG ** HiQyESdrvFGRp8+eniWzX4GoGA8dHiAwDvthe4YJs+P9
+** SIG ** omidHCydv3Lj5HWg5TUjjsmK7hoMZMfYQqF7tVIDSzqw
+** SIG ** jiNLS2PgIpQ3e9V5kAoUGFEs5v7BEvAcP2FhCoyi3PbD
+** SIG ** MKrNKBh1SMF5WgjNu4xVjPfUdpA6M0ZQc5hc9IVKaw+A
+** SIG ** 3V7Wvf2pL8Al9fl4141fEMJEVTyQPDFGy3CuB6kK46/B
+** SIG ** AW+QGiPiXzjbxghdR7ODQfAuADcUuRKqeZJSzYcPe9hi
+** SIG ** KaR+ML0btYxytEjy4+gh+V5MYnmLAgaff9ULAgMBAAGj
+** SIG ** ggFRMIIBTTAfBgNVHSMEGDAWgBS7r34CPfqm8TyEjq3u
+** SIG ** OJjs2TIy1DAdBgNVHQ4EFgQUKZFg/4pN+uv5pmq4z/nm
+** SIG ** S71JzhIwDgYDVR0PAQH/BAQDAgGGMBIGA1UdEwEB/wQI
+** SIG ** MAYBAf8CAQAwEwYDVR0lBAwwCgYIKwYBBQUHAwMwEQYD
+** SIG ** VR0gBAowCDAGBgRVHSAAMEwGA1UdHwRFMEMwQaA/oD2G
+** SIG ** O2h0dHA6Ly9jcmwuY29tb2RvY2EuY29tL0NPTU9ET1JT
+** SIG ** QUNlcnRpZmljYXRpb25BdXRob3JpdHkuY3JsMHEGCCsG
+** SIG ** AQUFBwEBBGUwYzA7BggrBgEFBQcwAoYvaHR0cDovL2Ny
+** SIG ** dC5jb21vZG9jYS5jb20vQ09NT0RPUlNBQWRkVHJ1c3RD
+** SIG ** QS5jcnQwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmNv
+** SIG ** bW9kb2NhLmNvbTANBgkqhkiG9w0BAQwFAAOCAgEAAj8C
+** SIG ** OcPu+Mo7id4MbU2x8U6ST6/COCwEzMVjEasJY6+rotcC
+** SIG ** P8xvGcM91hoIlP8l2KmIpysQGuCbsQciGlEcOtTh6Qm/
+** SIG ** 5iR0rx57FjFuI+9UUS1SAuJ1CAVM8bdR4VEAxof2bO4Q
+** SIG ** RHZXavHfWGshqknUfDdOvf+2dVRAGDZXZxHNTwLk/vPa
+** SIG ** /HUX2+y392UJI0kfQ1eD6n4gd2HITfK7ZU2o94VFB696
+** SIG ** aSdlkClAi997OlE5jKgfcHmtbUIgos8MbAOMTM1zB5Tn
+** SIG ** Wo46BLqioXwfy2M6FafUFRunUkcyqfS/ZEfRqh9TTjIw
+** SIG ** c8Jvt3iCnVz/RrtrIh2IC/gbqjSm/Iz13X9ljIwxVzHQ
+** SIG ** NuxHoc/Li6jvHBhYxQZ3ykubUa9MCEp6j+KjUuKOjswm
+** SIG ** 5LLY5TjCqO3GgZw1a6lYYUoKl7RLQrZVnb6Z53BtWfht
+** SIG ** Kgx/GWBfDJqIbDCsUgmQFhv/K53b0CDKieoofjKOGd97
+** SIG ** SDMe12X4rsn4gxSTdn1k0I7OvjV9/3IxTZ+evR5sL6iP
+** SIG ** DAZQ+4wns3bJ9ObXwzTijIchhmH+v1V04SF3AwpobLvk
+** SIG ** yanmz1kl63zsRQ55ZmjoIs2475iFTZYRPAmK0H+8KCgT
+** SIG ** +2rKVI2SXM3CZZgGns5IW9S1N5NGQXwH3c/6Q++6Z2H/
+** SIG ** fUnguzB9XIDj5hY5S6cxggqpMIIKpQIBATCBkTB9MQsw
+** SIG ** CQYDVQQGEwJHQjEbMBkGA1UECBMSR3JlYXRlciBNYW5j
+** SIG ** aGVzdGVyMRAwDgYDVQQHEwdTYWxmb3JkMRowGAYDVQQK
+** SIG ** ExFDT01PRE8gQ0EgTGltaXRlZDEjMCEGA1UEAxMaQ09N
+** SIG ** T0RPIFJTQSBDb2RlIFNpZ25pbmcgQ0ECEFCqq8Jaof4o
+** SIG ** TQTy/7m9F6cwDQYJYIZIAWUDBAIBBQCgfDAQBgorBgEE
+** SIG ** AYI3AgEMMQIwADAZBgkqhkiG9w0BCQMxDAYKKwYBBAGC
+** SIG ** NwIBBDAcBgorBgEEAYI3AgELMQ4wDAYKKwYBBAGCNwIB
+** SIG ** FTAvBgkqhkiG9w0BCQQxIgQgz4EPb87JpAsemzVjK/xF
+** SIG ** 8SVA75ZQzG0sk5Kg5/XijGgwDQYJKoZIhvcNAQEBBQAE
+** SIG ** ggEAZ6NCCG1LbSY8XWL3hBbYOJlVUr2wTTZy4FEezww9
+** SIG ** zHyf+TNpUO0gH9MG+Gtf0LJvI4F69s/dRdoV5l+fanVw
+** SIG ** 88P6heWqDt1Y9yT9UC4CLjQtgn1JiNFl6BO7jXAqxBNf
+** SIG ** shIOG6fQG8EsaHQ+KkoVKVPEQ3I40fwL+hYdWj55kn5/
+** SIG ** 8wIOHfB1jDhparTwQeFoeuUZOtSpu2otZ3zHoSR+mqNC
+** SIG ** ZP0ZI4p2sKY574cIhQexgUKTJCLmmerjqFznV8DK3FY+
+** SIG ** 1EI26tbHS9HKf8QgRXEUxlo5Wp3bNmywkQPNI+SIPStR
+** SIG ** th1s33TpMjw6wg9Y2PDSs/Ovp8vLCdXZrqS2JqGCCGow
+** SIG ** gghmBgorBgEEAYI3AwMBMYIIVjCCCFIGCSqGSIb3DQEH
+** SIG ** AqCCCEMwggg/AgEDMQ8wDQYJYIZIAWUDBAIBBQAwggEO
+** SIG ** BgsqhkiG9w0BCRABBKCB/gSB+zCB+AIBAQYKKwYBBAGy
+** SIG ** MQIBATAxMA0GCWCGSAFlAwQCAQUABCB8N7cF7CC9omnT
+** SIG ** gX8ND7FK6a0aTOoJD33ZTrQP6LGRagIUJAfg/ITTZ8yf
+** SIG ** LfIJchAsjuqMzCwYDzIwMTkwMjAyMTU0NzQyWqCBjKSB
+** SIG ** iTCBhjELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0
+** SIG ** ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEa
+** SIG ** MBgGA1UEChMRQ09NT0RPIENBIExpbWl0ZWQxLDAqBgNV
+** SIG ** BAMTI0NPTU9ETyBTSEEtMjU2IFRpbWUgU3RhbXBpbmcg
+** SIG ** U2lnbmVyoIIEoDCCBJwwggOEoAMCAQICEE6wh4/MJDU2
+** SIG ** stjJ9785VXcwDQYJKoZIhvcNAQELBQAwgZUxCzAJBgNV
+** SIG ** BAYTAlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2Fs
+** SIG ** dCBMYWtlIENpdHkxHjAcBgNVBAoTFVRoZSBVU0VSVFJV
+** SIG ** U1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
+** SIG ** c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZp
+** SIG ** cnN0LU9iamVjdDAeFw0xNTEyMzEwMDAwMDBaFw0xOTA3
+** SIG ** MDkxODQwMzZaMIGGMQswCQYDVQQGEwJHQjEbMBkGA1UE
+** SIG ** CBMSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYDVQQHEwdT
+** SIG ** YWxmb3JkMRowGAYDVQQKExFDT01PRE8gQ0EgTGltaXRl
+** SIG ** ZDEsMCoGA1UEAxMjQ09NT0RPIFNIQS0yNTYgVGltZSBT
+** SIG ** dGFtcGluZyBTaWduZXIwggEiMA0GCSqGSIb3DQEBAQUA
+** SIG ** A4IBDwAwggEKAoIBAQDOvHS3cIBPXvM/mKouy9QSASM1
+** SIG ** aQsivOb9CWwo5BMSrLu6LeXV3SLuc7Ys+NKkcedJJXir
+** SIG ** JbeQEKCbi3cm3UDqQaP9iM1ypok7UFcceiUkIgJRQDVn
+** SIG ** ijFpDeU5c0k5m5UBhVLyKxSJmk4EpLxArjmm3UAC4Dp1
+** SIG ** /j19VZRb8U4kfMi4WBnKwNq+WBOa5hzn0cE78F2PSQgh
+** SIG ** ntDzvtbUZk9ccjZ7w4LTmAiUr6tETxjHFNoWsR4yDhI4
+** SIG ** wLU8dux1UAAgBBEZ7cb/307+CIEnMU9xdG4DDHAngVVq
+** SIG ** mkOSpH/b/T/FFx5Bu87op3+Mlfn9f/hhiIkAPv8LAdv9
+** SIG ** 1bWk5JERAgMBAAGjgfQwgfEwHwYDVR0jBBgwFoAU2u1k
+** SIG ** dBScFDyr3ZmpvVsoTYs8ydgwHQYDVR0OBBYEFH2/kden
+** SIG ** bFpHZkR7kNSOkHJBjxfCMA4GA1UdDwEB/wQEAwIGwDAM
+** SIG ** BgNVHRMBAf8EAjAAMBYGA1UdJQEB/wQMMAoGCCsGAQUF
+** SIG ** BwMIMEIGA1UdHwQ7MDkwN6A1oDOGMWh0dHA6Ly9jcmwu
+** SIG ** dXNlcnRydXN0LmNvbS9VVE4tVVNFUkZpcnN0LU9iamVj
+** SIG ** dC5jcmwwNQYIKwYBBQUHAQEEKTAnMCUGCCsGAQUFBzAB
+** SIG ** hhlodHRwOi8vb2NzcC51c2VydHJ1c3QuY29tMA0GCSqG
+** SIG ** SIb3DQEBCwUAA4IBAQBQsPXfX60z3MNTWFi8whN1eyAd
+** SIG ** VMq6P1A/uor0awljwFtdi9Z1GnO9i/9H8RXcURYjGTLm
+** SIG ** bpJN0cYuWh6IQhTJcuXXCFCKavVkQFauJONhlxVC8CxI
+** SIG ** roPmNTyLW8KPro7MNFI04Pv+yv2xJGjRpBEjEAb9ssIk
+** SIG ** J8fX6Uocjz8+z+3rdXlsjl/3IbZQ5iWhzWaUEmy/27Ou
+** SIG ** h9hoA3IgAsJ+2pTzcgc8V+hVJOcFoB3EgQGCSx8/D50z
+** SIG ** m/BPzJ3WhYHPy+f9SumSuPcNcnMt6Xf5b48oej4evQiG
+** SIG ** 3I0eEV/3W7uHdsaeTFRh0Gfbk4TaMYcDkuef4+nPWlbI
+** SIG ** aOBSSZRcMYICcTCCAm0CAQEwgaowgZUxCzAJBgNVBAYT
+** SIG ** AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBM
+** SIG ** YWtlIENpdHkxHjAcBgNVBAoTFVRoZSBVU0VSVFJVU1Qg
+** SIG ** TmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51c2Vy
+** SIG ** dHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0
+** SIG ** LU9iamVjdAIQTrCHj8wkNTay2Mn3vzlVdzANBglghkgB
+** SIG ** ZQMEAgEFAKCBmDAaBgkqhkiG9w0BCQMxDQYLKoZIhvcN
+** SIG ** AQkQAQQwHAYJKoZIhvcNAQkFMQ8XDTE5MDIwMjE1NDc0
+** SIG ** MlowKwYLKoZIhvcNAQkQAgwxHDAaMBgwFgQUNlJ9T6Jq
+** SIG ** aPnrRZbx2Zq7LA6nbfowLwYJKoZIhvcNAQkEMSIEICbT
+** SIG ** EmVNWer5azUNpqoZd+NHOWvnMO/XfVNuRrnC6AkjMA0G
+** SIG ** CSqGSIb3DQEBAQUABIIBAECU2k25M2qtQKB0EYkRB1cZ
+** SIG ** OLhhSBrWno/gxmc0O85hmO7bKP7RvLjqYdZpk/8q/fHj
+** SIG ** /xjmdZG/nJtwob1276GA3k7sA+qQRgzp7nbwvUryq712
+** SIG ** 1KvUCAsxz2JzdKVlDx9EfNs27CimmyRWP/h+3HZYvNuX
+** SIG ** 7X05GGJvYgDr2RYw/8ob/B/g7HtfUkngohNY23hX7RPc
+** SIG ** LbcXNQkoVrSO96sCRq5KvqkcSqwGZbGb/OJJRbMSkESS
+** SIG ** 3qnV5Dyjjgo+vWYZK+7oBYcWs/mEH/V8pwcbE3wBvBqi
+** SIG ** 1p1eppjWd82/pGRXUyjMkUDZC8cbw8EK3Z+7XPltCaTu
+** SIG ** Dab8nN8W08o=
+</signature>
+</package>
