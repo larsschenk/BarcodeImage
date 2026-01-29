@@ -1,3 +1,8 @@
+⚠️ This project is obsolete.
+
+**Successor:** https://github.com/larsschenk/ActiveBarcodeCLI
+
+
 # BarcodeImage
 
 ###  Create barcode image files
